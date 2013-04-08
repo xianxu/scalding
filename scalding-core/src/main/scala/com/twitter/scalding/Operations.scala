@@ -62,12 +62,16 @@ import CascadingUtils.kryoFor
     }
   }
 
-  class MapFunction[S,T](fn : S => T, fields : Fields,
+  class MapFunction[S,T](fn : (S, FlowProcess[_]) => T, fields : Fields,
     conv : TupleConverter[S], set : TupleSetter[T])
     extends BaseOperation[Any](fields) with Function[Any] {
+    def this(fn : S => T, fields : Fields,
+          conv : TupleConverter[S], set : TupleSetter[T]) = this (
+            (s: S, _flow: FlowProcess[_]) => fn(s),
+            fields, conv, set)
 
     def operate(flowProcess : FlowProcess[_], functionCall : FunctionCall[Any]) {
-      val res = fn(conv(functionCall.getArguments))
+      val res = fn(conv(functionCall.getArguments), flowProcess)
       functionCall.getOutputCollector.add(set(res))
     }
   }

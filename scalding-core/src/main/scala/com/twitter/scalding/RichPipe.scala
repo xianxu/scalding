@@ -351,6 +351,12 @@ class RichPipe(val pipe : Pipe) extends java.io.Serializable with JoinAlgorithms
       setter.assertArityMatches(fs._2)
       each(fs)(new MapFunction[A,T](fn, _, conv, setter))
   }
+  def mapWithFlow[A,T](fs : (Fields,Fields))(fn : (A, FlowProcess[_]) => T)
+                (implicit conv : TupleConverter[A], setter : TupleSetter[T]) : Pipe = {
+      conv.assertArityMatches(fs._1)
+      setter.assertArityMatches(fs._2)
+      each(fs)(new MapFunction[A,T](fn, _, conv, setter))
+  }
   def mapTo[A,T](fs : (Fields,Fields))(fn : A => T)
                 (implicit conv : TupleConverter[A], setter : TupleSetter[T]) : Pipe = {
       conv.assertArityMatches(fs._1)

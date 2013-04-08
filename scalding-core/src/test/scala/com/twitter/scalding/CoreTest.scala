@@ -1,5 +1,6 @@
 package com.twitter.scalding
 
+import cascading.flow.FlowProcess
 import cascading.tuple.Fields
 import cascading.tuple.TupleEntry
 import java.util.concurrent.TimeUnit
@@ -1457,6 +1458,9 @@ class ToListGroupAllToListSpec extends Specification {
 class HangingJob(args : Args) extends Job(args) {
   val x = Tsv("in", ('x,'y))
     .read
+    .map('x -> 'x) { x: Int =>
+      x
+    }
     .filter('x, 'y) { t: (Int, Int) =>
       val (x, y) = t
       timeout(Millisecs(1)) {
@@ -1477,10 +1481,40 @@ class HangingTest extends Specification {
       .source(Tsv("in",('x,'y)), input)
       .sink[(Int,Int)](Tsv("out")) { outBuf =>
         "run correctly when task times out" in {
-          //outBuf.size must_== 100
-          //val correct = (1 to 100).map { i => (1, i) }
           outBuf.size must_== 50
           val correct = (1 to 50).map { i => (1, i*2) }
+          outBuf.toList.sorted must_== correct
+        }
+      }
+      .run
+      .runHadoop
+      .finish
+  }
+}
+
+class MapWithFlowJob(args : Args) extends Job(args) {
+  val x = Tsv("in", ('x,'y))
+    .read
+    .mapWithFlow('x -> 'x) { (x: Int, flow: FlowProcess[_]) => {
+        flow.increment("cat", "counter", 1)
+        x
+      }
+    }
+    .write(Tsv("out"))
+}
+
+class MapWithFlowTest extends Specification {
+  import Dsl._
+  noDetailedDiffs()
+
+  "A user function" should {
+    val input = (1 to 100).flatMap { i => List((1, i)) }.toList
+    JobTest(new MapWithFlowJob(_))
+      .source(Tsv("in",('x,'y)), input)
+      .sink[(Int,Int)](Tsv("out")) { outBuf =>
+        "have access to FlowProcess" in {
+          outBuf.size must_== 100
+          val correct = (1 to 100).map { i => (1, i) }
           outBuf.toList.sorted must_== correct
         }
       }
