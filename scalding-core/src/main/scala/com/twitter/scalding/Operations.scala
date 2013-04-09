@@ -50,12 +50,12 @@ object CascadingUtils {
 
 import CascadingUtils.kryoFor
 
-  class FlatMapFunction[S,T](fn : S => Iterable[T], fields : Fields,
+  class FlatMapFunction[S,T](fn : (S, FlowProcess[_]) => Iterable[T], fields : Fields,
     conv : TupleConverter[S], set : TupleSetter[T])
     extends BaseOperation[Any](fields) with Function[Any] {
 
     def operate(flowProcess : FlowProcess[_], functionCall : FunctionCall[Any]) {
-      fn(conv(functionCall.getArguments)).foreach { arg : T =>
+      fn(conv(functionCall.getArguments), flowProcess).foreach { arg : T =>
         val this_tup = set(arg)
         functionCall.getOutputCollector.add(this_tup)
       }
@@ -65,10 +65,11 @@ import CascadingUtils.kryoFor
   class MapFunction[S,T](fn : (S, FlowProcess[_]) => T, fields : Fields,
     conv : TupleConverter[S], set : TupleSetter[T])
     extends BaseOperation[Any](fields) with Function[Any] {
-    def this(fn : S => T, fields : Fields,
-          conv : TupleConverter[S], set : TupleSetter[T]) = this (
-            (s: S, _flow: FlowProcess[_]) => fn(s),
-            fields, conv, set)
+    // TODO(xx): remove, we are trying the route of implicits
+    //def this(fn : S => T, fields : Fields,
+          //conv : TupleConverter[S], set : TupleSetter[T]) = this (
+            //(s: S, _flow: FlowProcess[_]) => fn(s),
+            //fields, conv, set)
 
     def operate(flowProcess : FlowProcess[_], functionCall : FunctionCall[Any]) {
       val res = fn(conv(functionCall.getArguments), flowProcess)
@@ -80,16 +81,16 @@ import CascadingUtils.kryoFor
    * BaseOperation with support for context
    */
   abstract class SideEffectBaseOperation[C] (
-    bf: => C,                // begin function returns a context
-    ef: C => Unit,          // end function to clean up context object
+    bf: FlowProcess[_] => C,                // begin function returns a context
+    ef: (C, FlowProcess[_]) => Unit,          // end function to clean up context object
     fields: Fields
    ) extends BaseOperation[C](fields) {
     override def prepare(flowProcess: FlowProcess[_], operationCall: OperationCall[C]) {
-      operationCall.setContext(bf)
+      operationCall.setContext(bf(flowProcess))
     }
 
     override def cleanup(flowProcess: FlowProcess[_], operationCall: OperationCall[C]) {
-      ef(operationCall.getContext)
+      ef(operationCall.getContext, flowProcess)
     }
    }
 
@@ -97,9 +98,9 @@ import CascadingUtils.kryoFor
    * A map function that allows state object to be set up and tear down.
    */
   class SideEffectMapFunction[S, C, T] (
-    bf: => C,                // begin function returns a context
-    fn: (C, S) => T,         // function that takes a context and a tuple and generate a new tuple
-    ef: C => Unit,           // end function to clean up context object
+    bf: FlowProcess[_] => C,                // begin function returns a context
+    fn: (C, S, FlowProcess[_]) => T,         // function that takes a context and a tuple and generate a new tuple
+    ef: (C, FlowProcess[_]) => Unit,           // end function to clean up context object
     fields: Fields,
     conv: TupleConverter[S],
     set: TupleSetter[T]
@@ -108,7 +109,7 @@ import CascadingUtils.kryoFor
     override def operate(flowProcess: FlowProcess[_], functionCall: FunctionCall[C]) {
       val context = functionCall.getContext
       val s = conv(functionCall.getArguments)
-      val res = fn(context, s)
+      val res = fn(context, s, flowProcess)
       functionCall.getOutputCollector.add(set(res))
     }
   }

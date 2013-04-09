@@ -39,4 +39,5 @@ object CallWithFlow {
   implicit def simpleCall[A, T](f: =>T) = (flow: FlowProcess[_]) => f
   implicit def simpleCall[A, T](f: A=>T) = (a: A, flow: FlowProcess[_]) => f(a)
   implicit def simpleCall[A, B, T](f: (A, B)=>T) = (a: A, b: B, flow: FlowProcess[_]) => f(a, b)
+  implicit def simpleCall[A, B](f: (A, B)=>A) = ((a: A, flow: FlowProcess[_]), b: B) => (f(a, b), flow)
 }
